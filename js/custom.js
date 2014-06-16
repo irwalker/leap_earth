@@ -1,10 +1,44 @@
 
+/**
+*   Object to store Intervals; we need to keep track of them to make
+*   animation creation and stopping instant and effective.
+*/
+var interval = {
+  
+  intervals : {},
+
+  make : function ( fun, delay ){
+
+        var newInterval = setInterval.apply(
+            window,
+            [ fun, delay ].concat( [].slice.call(arguments, 2) )
+        );
+
+        this.intervals[ newInterval ] = true;
+
+        return newInterval;
+  },
+
+  clear : function ( id ){
+     return clearInterval( this.intervals[id] );
+  },
+
+  clearAll : function(){
+    var all = Object.keys( this.intervals ), len = all.length;
+
+     while ( len --> 0 ) {
+      clearInterval( all.shift() );
+    }
+  }
+
+};
 
     var options = { zoom: 3.0, position: [47.19537,8.524404] };
     var earth = new WebGLEarth('earth_div', options);
 
     //Jquery for the search tool. 
   $("#nav_input").bind("enterKey", function(e){
+    interval.clearAll();
     var geocoder = new google.maps.Geocoder();
     var address = $("#nav_input").val();
 
@@ -21,6 +55,11 @@
     if(e.keyCode == 13){
       $(this).trigger("enterKey");
     }
+  });
+
+  //Jquery for stop rotation button
+  $("#stop_rotation").click(function(e){
+    interval.clearAll();
   });
   
 
@@ -99,6 +138,7 @@
 	  var controller = new Leap.Controller(controllerOptions);
 
 	 var intervalId = null;
+   var currentInterval = null;
 
 	// Tells the controller what to do every time it sees a frame
     controller.on( 'frame' , function(frame){
@@ -109,7 +149,7 @@
     var swipeDelta = 0.1;   
     var durationMultiplier = 5;
     var swipeDirection = "";
-    var currentInterval = null;
+   
 
    
 	  //Clears the canvas so we are not drawing multiple frames	
@@ -127,24 +167,25 @@
 	          		var isHorizontal = Math.abs(gesture.direction[0]) > Math.abs(gesture.direction[1]);
 	          		//Classify as either up or down
 	          		 if(isHorizontal){
-	              		if(gesture.direction[0] > 0){
-	                 		 if(swipeDirection != "right"){
-                            clearInterval(currentInterval);
-                            currentInterval= setInterval('var cx = earth.getPosition(); earth.setPosition(cx[0],cx[1]-0.1);', 30);
-                            swipeDirection = "right";        
-                       }                 		            		             		
+	              		if(gesture.direction[0] > 0){	                 		 
+                        if(swipeDirection != "right"){
+                          interval.clearAll();
+                        }                        
+                        interval.make('var cx = earth.getPosition(); earth.setPosition(cx[0],cx[1]-0.1);', 30);                            
+                        swipeDirection = "right";        
+                                       		            		             		
 	              		} else {
 	                  		if(swipeDirection != "left"){
-                            clearInterval(currentInterval);
-                            currentInterval= setInterval('var cx = earth.getPosition(); earth.setPosition(cx[0],cx[1]+0.1);', 30);
-                            swipeDirection = "left";                           
-                        }                  		             				                  		
+                          interval.clearAll();
+                         }                                                            
+                          interval.make('var cx = earth.getPosition(); earth.setPosition(cx[0],cx[1]+0.1);', 30);                            
+                         swipeDirection = "left";                           
 	              		}
 	          		} else { //vertical
 	              		if(gesture.direction[1] > 0){
 	                 	 swipeDirection = "up";
 	             	 	} else {
-	                  	 swipeDirection = "down";
+	                  swipeDirection = "down";
 	              		}                  
 	          		}
 	          		console.log(swipeDirection);
@@ -153,34 +194,61 @@
 	      }  
 
       //initite variables
-      var firstValidFrame = null
-      var cameraRadius = 290
-      var rotateY = earth.getPosition['lat'];
-      var rotateX = earth.getPosition['lng'];
+      var firstValidFrame = null;
+      var cameraRadius = 290;      
       var rotateY = 90, rotateX = 0, curY = 0
-      //var fov = camera.fov;
+      var camZoom = earth.getZoom();
 
       var position = earth.getPosition();
+      
     
 
         if(frame.valid){
           
           if (!firstValidFrame) firstValidFrame = frame
-          var t = firstValidFrame.translation(frame)
+          var t = firstValidFrame.translation(frame);
+
+
+        if(typeof frame.hands[0] !== "undefined" ){
+          //console.log(frame.hands[0]);
+          //{id: 31, palmPosition: Array[3], direction: Array[3], palmVelocity: Array[3], palmNormal: Array[3]…}
+          var handPalmPos = frame.hands[0].palmPosition;
+          var x = handPalmPos[0];
+          var y = handPalmPos[1];
+          var z = handPalmPos[2];
+          var lat =  earth.getPosition()[0];
+          var lng = earth.getPosition()[1];
+          
+
+          var newLat = lat +  Math.sin(y * Math.PI/180) * Math.cos(x * Math.PI/180);
+          var newLng = lng + Math.cos(y * Math.PI/180);
+          console.log(lat+"; to :"+newLat+" "  + lng + " to:" + newLng);
+         // var newPos = [newLat, newLng];
+        //  earth.setPosition(newPos);
+
+        }else{
+          //If hand is moved away from device, stop earth rotation.
+          interval.clearAll();
+        }
+
 
           //limit y-axis between 0 and 180 degrees
-          curY = map(t[1], -300, 300, 0, 179)
+          //curY = map(t[1], -300, 300, 0, 179)
 
            //assign rotation coordinates
-           rotateX = t[0]
-           rotateY = -curY
-
-           console.log('earth position'+position+"rotateX"+rotateX+"rotateY" +rotateY);
+          // rotateX = t[0]
+          // rotateY = -curY
 
           // zoom = Math.max(0, t[2] + 200);
-          // zoomFactor = 1/(1 + (zoom / 150));
+         //  zoomFactor = 1/(1 + (zoom / 150));
 
-          // //adjust 3D spherical coordinates of the camera
+           //adjust 3D reference for the globe
+         //  earth.setZoom(camZoom*zoomFactor);
+
+           //adjust X and Y positioning 
+
+
+           //adjust 3D spherical coordinates of the camera
           // camera.position.x = earth.position.x + cameraRadius * Math.sin(rotateY * Math.PI/180) * Math.cos(rotateX * Math.PI/180)
           // camera.position.z = earth.position.y + cameraRadius * Math.sin(rotateY * Math.PI/180) * Math.sin(rotateX * Math.PI/180)
           // camera.position.y = earth.position.z + cameraRadius * Math.cos(rotateY * Math.PI/180)
