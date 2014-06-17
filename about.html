@@ -23,7 +23,6 @@
 </head>
 
 <body>
-
     <div id="wrapper">
 
         <!-- Sidebar -->
@@ -33,38 +32,34 @@
                 </li> 
                 <li><a href="/">Overview</a>
                 </li>
-                <li><a href="./about.html">About</a>
-                </li>
-                <li><button id="stop_rotation">Stop Rotation</button></li>
-                <li>Navigate To Location
-                </li>
-                <li>                
-                    <input id="nav_input" type="text">                    
-                </li>
-                <li>
-                    <a href="#">Leap Hand</a>
-                </li>
-                <li>
-                <div id="canvas_div"><canvas id="canvas"></canvas></div>    </li>
+                <li><a href="/about.html">About</a>
+                </li>         
             </ul>
         </div>
 
         <!-- Page content -->
         <div id="page-content-wrapper">
+
             <div class="content-header">
                 <h1>
-                    <a id="menu-toggle" href="#" class="btn btn-default"><i class="icon-reorder"></i></a>
+                    <a id="menu-toggle" href="/" class="btn btn-default"><i class="icon-reorder"></i></a>
                     Leap Explorer
                 </h1>
             </div>
+
             <!-- Keep all page content within the page-content inset div! -->
             <div class="page-content inset">
                 <div class="row">
                     <div class="col-md-12">
-                        <div id="earth_div"/>
+                        Leap Motion globe explorer. Navigate with one hand. To spin the globe horizontally, move your hand left/right. To move the globe up and down, move you hand forward or backward. Zoom is controlled by moving the hand up or down. Finer grained zoom control is given using gesture control, by moving the finger in a circlular movement. Zoom in by moving your finger clockwise, out by moving your finger anti-clockwise. 
                     </div>                                    
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        The leap motion hand box will display what the leap motion senses. If control is lost, move your hand outside the range and all movement on page will cease.
+                    </div>                                    
+                </div>
             </div>
-        </div>
 
         <div class="footer-below">
             <div class="container">
@@ -91,9 +86,6 @@
     </script>
     <!--Javascript include Google maps APIs -->
 <script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=false"></script>
-
-    <!-- Custom Javascript for the Globe and Leap Motion -->
-    <script src="js/custom.js"></script>
 </body>
 
 </html>

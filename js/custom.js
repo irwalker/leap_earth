@@ -66,7 +66,7 @@ var zoomHandler = {
 
   isClockwise : false,
   
-  startZoom : function(clockwise, e){
+  startZoom : function(clockwise, e){  
     var zoom_const = 0.01;
     var zoom_interval = 1000;
     var min_zoom = 3.5;
@@ -118,7 +118,6 @@ function getSensitivity(e){
   var zoom = e.getZoom();
   var sensitivity = zoom_factor/(zoom ^ 2);
   return sensitivity;
-
 }
 
     var options = { zoom: 3.0, position: [47.19537,8.524404] };
@@ -148,8 +147,7 @@ function getSensitivity(e){
   //Jquery for stop rotation button
   $("#stop_rotation").click(function(e){
     interval.clearAll();
-  });
-  
+  });  
 
   	var canvas = document.getElementById('canvas');
 
@@ -288,9 +286,13 @@ function getSensitivity(e){
                   if (dotProduct  >  0) {clockwise = true};
                   zoomHandler.startZoom(clockwise, earth);
                 }
-                
-
-            }    		
+            } 
+            else if(gesture.type=="screenTap"){
+              gestureLocker.lock();
+              var lat = earth.getPosition()[0];
+              var lng = earth.getPosition()[1];              
+              earth.initMarker(lat, lng);
+            }
 	      	}
 	      }else{
           zoomHandler.stopZoom();
@@ -315,27 +317,27 @@ function getSensitivity(e){
               lastValidFrameId = frame.id;
 
               if(prevFrame.valid){
-
                 var frameTranslate = frame.translation(prevFrame);
                 var rotateX = frameTranslate[0];
-               var rotateY = frameTranslate[1]; //the magnitude that the hand has moved on y axis
-
+                var rotateY = frameTranslate[1]; //the magnitude that the hand has moved on y axis
                 var rotateZ = frameTranslate[2];//the amount the hand has moved on z axis - roll.
 
                 var handPalmPos = frame.hands[0].palmPosition;
                 var lat =  earth.getPosition()[0];
-                var lng = earth.getPosition()[1];            
+                var lng = earth.getPosition()[1];
 
                 var SCALE_FACTOR = 50;
 
-                var zoom = Math.max(0, frameTranslate[2] + 200);
+                var zoom = earth.getZoom();
 
-                var zoomFactor = 1/(1 + (zoom / 150));
-
-                var newLat = lat + Math.sin(rotateY * Math.PI/180) * getSensitivity(earth); //sensitivity changes based on current zoom level
+                var newLat = lat - Math.sin(rotateZ * Math.PI/180) * getSensitivity(earth); //sensitivity changes based on current zoom level
                 var newLng = lng +  Math.sin(rotateX * Math.PI/180) * getSensitivity(earth); //sensitivity changes based on current zoom level
+                var newZoom = zoom - Math.sin(rotateY * Math.PI/180); 
+
                 earth.setPosition(newLat, newLng); 
+                earth.setZoom(newZoom);
               }
+
             }else{
               zoomHandler.stopZoom();
             }
@@ -411,8 +413,6 @@ function getSensitivity(e){
           c.stroke();
 
         }
-
-
         /*
             Third draw the hand
         */
