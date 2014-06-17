@@ -33,6 +33,94 @@ var interval = {
 
 };
 
+/**
+* Object to store gesture information
+* If we are currently performing a gesture, want to lock other tracking, so this is necessary.
+*/
+var gestureLocker = {
+
+  locked : false,
+
+  lock : function(){
+    this.locked = true;
+  },
+
+  unlock : function(){
+    this.locked = false;
+  },
+
+  isLocked : function(){
+    return this.locked;
+  }
+
+};
+
+/**
+* Object to help with handling zooming actions
+*/
+var zoomHandler = {
+
+  isZooming : false, 
+
+  zoomInterval : '',
+
+  isClockwise : false,
+  
+  startZoom : function(clockwise, e){
+    var zoom_const = 0.01;
+    var zoom_interval = 1000;
+    var min_zoom = 3.5;
+    var max_zoom = 15.0
+    if(!this.isZooming){
+      isClockwise = clockwise;
+      this.isZooming = true;     
+      if(clockwise){
+        this.zoomInterval = interval.make(function(){
+        var zoom = e.getZoom();
+        console.log(zoom);
+        if( zoom <=  max_zoom){
+           e.setZoom(zoom + zoom_const);
+         } 
+         if(gestureLocker.isLocked() == false){
+           interval.clearAll(); //safety feature to stop zoom continuing
+          }    
+        }, zoom_interval);
+      }else{
+         this.zoomInterval = interval.make(function(){
+         var zoom = e.getZoom();
+         console.log(zoom);
+          if(zoom >= min_zoom){
+           e.setZoom(zoom - zoom_const);
+         }  
+         if(gestureLocker.isLocked() == false){
+           interval.clearAll(); //safety feature to stop zoom continuing
+          }   
+      }, zoom_interval);
+      }      
+    }
+  },
+
+  stopZoom : function(){
+    if(this.isZooming) {  interval.clear(this.zoomInterval); }
+
+    this.isZooming = false;   
+  }
+};
+
+
+/**
+* Function to detect how sensitive motion needs to be, based
+* on the current level of zoom
+* @params e - a WebGL Earth Object, that is initialized.
+*/
+function getSensitivity(e){
+  var zoom_factor = 50;
+  var zoom = e.getZoom();
+  var sensitivity = zoom_factor/(zoom ^ 2);
+  return sensitivity;
+
+}
+
     var options = { zoom: 3.0, position: [47.19537,8.524404] };
     var earth = new WebGLEarth('earth_div', options);
 
@@ -137,8 +225,9 @@ var interval = {
 
 	  var controller = new Leap.Controller(controllerOptions);
 
-	 var intervalId = null;
-   var currentInterval = null;
+	  var intervalId = null;
+    var currentInterval = null;
+    var lastValidFrameId = null;   
 
 	// Tells the controller what to do every time it sees a frame
     controller.on( 'frame' , function(frame){
@@ -150,8 +239,6 @@ var interval = {
     var durationMultiplier = 5;
     var swipeDirection = "";
    
-
-   
 	  //Clears the canvas so we are not drawing multiple frames	
 	 
 	  	 c.clearRect( 0 , 0 , width , height );
@@ -161,7 +248,7 @@ var interval = {
 	      if(frame.gestures.length > 0){
 	      	for(var i = 0; i < frame.gestures.length; i++){
 	      		var gesture = frame.gestures[i];
-
+            //swipe gestures are no longer working due to clashes with actual rotation of the globe.
 	      		if(gesture.type == "swipe" && gesture.state == "stop"){
 	      			//Classify as either horizontal or vertical
 	          		var isHorizontal = Math.abs(gesture.direction[0]) > Math.abs(gesture.direction[1]);
@@ -189,74 +276,78 @@ var interval = {
 	              		}                  
 	          		}
 	          		console.log(swipeDirection);
-	      		}      		
+	      		}  else if(gesture.type=="circle"){
+                gestureLocker.lock();
+                console.log('CIRCLE');
+                var clockwise = false;
+                if(gesture.pointableIds != null){
+                  var pointableID = gesture.pointableIds[0];
+                  var direction = frame.pointable(pointableID).direction;
+                  var dotProduct = Leap.vec3.dot(direction, gesture.normal);
+
+                  if (dotProduct  >  0) {clockwise = true};
+                  zoomHandler.startZoom(clockwise, earth);
+                }
+                
+
+            }    		
 	      	}
-	      }  
+	      }else{
+          zoomHandler.stopZoom();
+          gestureLocker.unlock();
+        }    
 
-      //initite variables
-      var firstValidFrame = null;
-      var cameraRadius = 290;      
-      var rotateY = 90, rotateX = 0, curY = 0
-      var camZoom = earth.getZoom();
-
-      var position = earth.getPosition();
-      
-    
+       
 
         if(frame.valid){
-          
-          if (!firstValidFrame) firstValidFrame = frame
-          var t = firstValidFrame.translation(frame);
+          if(lastValidFrameId == null){
+            lastValidFrameId = frame.id;
+          }       
 
 
-        if(typeof frame.hands[0] !== "undefined" ){
-          //console.log(frame.hands[0]);
-          //{id: 31, palmPosition: Array[3], direction: Array[3], palmVelocity: Array[3], palmNormal: Array[3]…}
-          var handPalmPos = frame.hands[0].palmPosition;
-          var x = handPalmPos[0];
-          var y = handPalmPos[1];
-          var z = handPalmPos[2];
-          var lat =  earth.getPosition()[0];
-          var lng = earth.getPosition()[1];
-          
+            if(typeof frame.hands[0] !== "undefined" ){
+               /**
+              * We only want to do actions if the gesture locker is not enabled
+              */ 
+             if(gestureLocker.isLocked() == false){
+              
+              var prevFrame = controller.frame(1); //get most recent frame
+              lastValidFrameId = frame.id;
 
-          var newLat = lat +  Math.sin(y * Math.PI/180) * Math.cos(x * Math.PI/180);
-          var newLng = lng + Math.cos(y * Math.PI/180);
-          console.log(lat+"; to :"+newLat+" "  + lng + " to:" + newLng);
-         // var newPos = [newLat, newLng];
-        //  earth.setPosition(newPos);
+              if(prevFrame.valid){
 
-        }else{
-          //If hand is moved away from device, stop earth rotation.
-          interval.clearAll();
-        }
+                var frameTranslate = frame.translation(prevFrame);
+                var rotateX = frameTranslate[0];
+               var rotateY = frameTranslate[1]; //the magnitude that the hand has moved on y axis
 
+                var rotateZ = frameTranslate[2];//the amount the hand has moved on z axis - roll.
 
-          //limit y-axis between 0 and 180 degrees
-          //curY = map(t[1], -300, 300, 0, 179)
+                var handPalmPos = frame.hands[0].palmPosition;
+                var lat =  earth.getPosition()[0];
+                var lng = earth.getPosition()[1];            
 
-           //assign rotation coordinates
-          // rotateX = t[0]
-          // rotateY = -curY
+                var SCALE_FACTOR = 50;
 
-          // zoom = Math.max(0, t[2] + 200);
-         //  zoomFactor = 1/(1 + (zoom / 150));
+                var zoom = Math.max(0, frameTranslate[2] + 200);
 
-           //adjust 3D reference for the globe
-         //  earth.setZoom(camZoom*zoomFactor);
+                var zoomFactor = 1/(1 + (zoom / 150));
 
-           //adjust X and Y positioning 
-
-
-           //adjust 3D spherical coordinates of the camera
-          // camera.position.x = earth.position.x + cameraRadius * Math.sin(rotateY * Math.PI/180) * Math.cos(rotateX * Math.PI/180)
-          // camera.position.z = earth.position.y + cameraRadius * Math.sin(rotateY * Math.PI/180) * Math.sin(rotateX * Math.PI/180)
-          // camera.position.y = earth.position.z + cameraRadius * Math.cos(rotateY * Math.PI/180)
-          // camera.fov = fov * zoomFactor;
-        }
-        
+                var newLat = lat + Math.sin(rotateY * Math.PI/180) * getSensitivity(earth); //sensitivity changes based on current zoom level
+                var newLng = lng +  Math.sin(rotateX * Math.PI/180) * getSensitivity(earth); //sensitivity changes based on current zoom level
+                earth.setPosition(newLat, newLng); 
+              }
+            }else{
+              zoomHandler.stopZoom();
+            }
+            }else{
+              //If hand is moved away from device, stop earth rotation.
+              zoomHandler.stopZoom();
+              interval.clearAll();
+            }
+          }
+              
     });
-
+      
 /**
 * Draw the hand, as part of a reference guide for the user
 */
